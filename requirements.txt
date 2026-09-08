@@ -1,0 +1,16 @@
+# Python dependencies for the face -> search -> hash pipeline.
+# Install with:  pip install -r requirements.txt
+# (insightface may need a second step - see README "Installation")
+
+# --- math / image handling ---
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+pillow==10.4.0
+
+# --- face detection (SCRFD) + face embeddings (ArcFace) ---
+insightface==0.7.3
+onnxruntime==1.19.2
+
+# --- HTTP calls (SerpApi, candidate image download) + .env loading ---
+requests==2.32.3
+python-dotenv==1.0.1

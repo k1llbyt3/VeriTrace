@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "alreadyRegistered": false,
+  "contractAddress": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+  "chainId": 31337,
+  "registrant": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "contentHash": "0xb23eff4235d01462eb45746bebf69f00ac2581d5234f0d0afd5423d485c46610",
+  "onChainHash": "0xb23eff4235d01462eb45746bebf69f00ac2581d5234f0d0afd5423d485c46610",
+  "sourceUrl": "local://requirements.txt",
+  "txHash": "0xb06eb61d27f0ae0d05f820ce668a853c5a945216b37a44a531a09d1115534a49",
+  "blockNumber": 6,
+  "gasUsed": "159120",
+  "registeredAt": 1788620129,
+  "status": "confirmed"
+}

@@ -1,0 +1,21 @@
+{
+  "name": "content-registry",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Solidity ContentRegistry + ethers.js blockchain layer for HH Goa 2026 Task 3",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "chain": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
+    "@nomicfoundation/hardhat-ethers": "3.0.8",
+    "chai": "4.5.0",
+    "dotenv": "16.4.7",
+    "ethers": "6.13.4",
+    "hardhat": "2.22.17"
+  }
+}
