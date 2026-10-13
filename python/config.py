@@ -33,6 +33,9 @@ def _float(name: str, default: float) -> float:
 
 # --- search ---
 SERPAPI_KEY = _str("SERPAPI_KEY")
+LENS_CACHE_ENABLED = _str("LENS_CACHE_ENABLED", "true").lower() in {"1", "true", "yes"}
+LENS_CACHE_TTL = _int("LENS_CACHE_TTL", 604800)  # 7 days in seconds
+MAX_IMAGE_DOWNLOAD_BYTES = _int("MAX_IMAGE_DOWNLOAD_BYTES", 15 * 1024 * 1024)  # 15 MB
 
 # --- face pipeline ---
 INSIGHTFACE_MODEL = _str("INSIGHTFACE_MODEL", "buffalo_l")

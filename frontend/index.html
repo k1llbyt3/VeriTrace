@@ -3,19 +3,205 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#11231f">
-  <title>Goaa / Evidence Console</title>
+  <meta name="theme-color" content="#f3f0e8">
+  <meta name="description" content="VeriTrace: Upload a face image, find real matching content online, fingerprint it with SHA-256, and verify it on the blockchain.">
+  <title>VeriTrace | Evidence Console</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="topbar">
+    <a class="brand" href="./frontend/">VERI<span class="brand-trace">TRACE</span></a>
+    <span class="connection-badge" id="connection-badge">
+    </span>
+  </div>
+
   <main class="shell">
-    <header class="topbar"><a class="brand" href="./">GOAA <span>/ EVIDENCE CONSOLE</span></a><span class="live-indicator"><i></i><span id="connection-label">Local pipeline</span></span></header>
-    <section class="hero"><div><p class="eyebrow">Task 03 / Proof of provenance</p><h1>Find it.<br><em>Fingerprint it.</em><br>Prove it.</h1></div><div class="hero-copy"><p>Face similarity finds the strongest real-world match. A cryptographic fingerprint and blockchain record make that artifact verifiable.</p><p class="microcopy">Demo mode is wired to the existing <strong>case-001</strong> Lens search and local Hardhat chain.</p></div></section>
-    <section class="control-panel" aria-labelledby="input-title"><div class="section-head"><div><p class="eyebrow">01 / Input</p><h2 id="input-title">Choose a face image</h2></div><span class="case-label" id="case-label">CASE-002 / UPLOAD</span></div><div class="input-row"><label class="dropzone" id="dropzone" for="image-input"><input id="image-input" type="file" accept="image/jpeg,image/png,image/webp"><span class="upload-icon">+</span><span><strong id="file-label">Choose an image</strong><small>JPG, PNG, or WEBP</small></span></label><button class="sample-button" id="sample-button" type="button">Use case-001 sample</button><button class="analyze-button" id="analyze-button" type="button" disabled><span>Analyze evidence</span><b>↗</b></button></div><label class="source-input">Public source URL <span>Optional for the case-001 sample; required for a local upload.</span><input id="source-url-input" type="url" placeholder="https://www.instagram.com/p/.../"></label><div class="selected-file" id="selected-file" hidden><img id="input-preview" alt="Uploaded input preview"><div><p class="eyebrow">Selected input</p><strong id="input-name">—</strong><span id="input-meta">—</span></div></div><p class="error" id="error" role="alert" hidden></p></section>
-    <section class="progress-panel" id="progress-panel" hidden aria-live="polite"><div class="progress-top"><span id="progress-label">Preparing pipeline</span><span id="progress-count">0 / 5</span></div><div class="progress-track"><span id="progress-bar"></span></div><div class="steps"><span data-step="1">Detecting face</span><span data-step="2">Searching</span><span data-step="3">Comparing candidates</span><span data-step="4">Anchoring</span><span data-step="5">Verifying</span></div></section>
-    <section class="results" id="results" hidden><div class="results-head"><div><p class="eyebrow">02 / Evidence readout</p><h2>What the pipeline found</h2></div><span class="status-pill" id="status-pill">VERIFIED</span></div><div class="evidence-grid"><article class="image-card"><div class="card-label">INPUT IMAGE</div><img id="result-input" alt="Analyzed input image"></article><article class="image-card candidate-card"><div class="card-label">SELECTED CANDIDATE <span id="candidate-rank">#1</span></div><img id="result-candidate" alt="Selected candidate image"><a id="source-link" href="#" target="_blank" rel="noreferrer">Open source ↗</a></article><article class="score-card"><div class="card-label">ARC FACE SIMILARITY</div><strong id="similarity">—</strong><p>Visual face similarity<br><span>Threshold: <span id="threshold">—</span></span></p></article></div><div class="details-grid"><article class="detail-card"><div class="card-label">SOURCE URL</div><a id="source-url" href="#" target="_blank" rel="noreferrer">—</a><div class="card-label spaced">SHA-256 / EXACT BYTES</div><code id="sha256">—</code></article><article class="detail-card"><div class="card-label">BLOCKCHAIN RECORD</div><dl><dt>Transaction</dt><dd id="tx-hash">—</dd><dt>Block</dt><dd id="block-number">—</dd><dt>Chain</dt><dd id="chain-id">—</dd></dl></article></div><div class="explanation"><div><p class="eyebrow">Three layers of evidence</p><h3>Similarity is not integrity.</h3></div><div class="explanation-copy"><p><strong>ArcFace</strong> measures visual face similarity.</p><p><strong>SHA-256</strong> creates an exact byte-level fingerprint.</p><p><strong>Blockchain</strong> stores a tamper-resistant record.</p></div></div><div class="final-status" id="final-status"><span class="status-mark">✓</span><div><p class="eyebrow">Final read-back</p><h2 id="verification-title">VERIFIED</h2><p id="verification-copy">The preserved artifact matches the fingerprint recorded on-chain.</p></div></div></section>
-    <footer><span>GOAA / HH 2026 / TASK 03</span><span>Local RPC <code>127.0.0.1:8545</code></span></footer>
+
+    <!-- ── HERO ────────────────────────────────────────────────────── -->
+    <section class="hero">
+      <div class="hero-left">
+        <p class="eyebrow">Evidence Verification System</p>
+        <h1>Find it.<br><em>Fingerprint it.</em><br>Prove it.</h1>
+      </div>
+      <div class="hero-right">
+        <p>Face similarity locates the strongest real-world match online. A cryptographic fingerprint and blockchain record make that artifact independently verifiable.</p>
+        <p class="hero-tech">SCRFD detection · ArcFace embeddings · SHA-256 · On-chain registry</p>
+      </div>
+    </section>
+
+    <!-- ── STEP 01: INPUT ─────────────────────────────────────────── -->
+    <section class="panel input-panel" aria-labelledby="input-heading">
+      <div class="panel-head">
+        <div>
+          <p class="step-label">01</p>
+          <h2 id="input-heading">Choose an image</h2>
+        </div>
+        <div class="case-actions">
+          <button class="btn btn-ghost" id="load-case001-btn" type="button">Load case-001</button>
+          <button class="btn btn-ghost" id="load-case002-btn" type="button">Load case-002</button>
+          <span class="case-badge" id="case-badge"></span>
+        </div>
+      </div>
+
+      <label class="dropzone" id="dropzone" for="image-input">
+        <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp">
+        <span class="dropzone-icon">↑</span>
+        <span class="dropzone-text">
+          <strong id="file-label">Drop an image or click to browse</strong>
+          <small>JPG · PNG · WEBP</small>
+        </span>
+      </label>
+
+      <div class="selected-preview" id="selected-preview" hidden>
+        <img id="input-preview" alt="Input image preview">
+        <div class="selected-meta">
+          <p class="eyebrow">Selected input</p>
+          <strong id="input-name">—</strong>
+          <span id="input-meta" class="mono-small">—</span>
+        </div>
+      </div>
+
+      <div class="source-row">
+        <label class="source-label" for="source-url-input">
+          Public source URL <span class="label-hint">Optional — leave blank to upload via SerpApi</span>
+        </label>
+        <input id="source-url-input" type="url" class="source-input" placeholder="https://www.instagram.com/p/…/">
+      </div>
+
+      <p class="error-msg" id="error-msg" role="alert" hidden></p>
+
+      <div class="action-row">
+        <button class="btn btn-primary" id="analyze-btn" type="button" disabled>
+          Analyze evidence <span class="btn-arrow">→</span>
+        </button>
+        <button class="btn btn-ghost" id="clear-btn" type="button" hidden>
+          Clear workspace
+        </button>
+      </div>
+    </section>
+
+    <!-- ── PROGRESS ───────────────────────────────────────────────── -->
+    <section class="progress-panel" id="progress-panel" hidden aria-live="polite">
+      <div class="progress-header">
+        <span id="progress-label">Preparing pipeline</span>
+        <span class="mono-small" id="progress-count">0 / 5</span>
+      </div>
+      <div class="progress-track">
+        <span class="progress-fill" id="progress-fill"></span>
+      </div>
+      <div class="progress-steps">
+        <span data-step="1">Detecting face</span>
+        <span data-step="2">Searching</span>
+        <span data-step="3">Comparing</span>
+        <span data-step="4">Anchoring</span>
+        <span data-step="5">Verifying</span>
+      </div>
+    </section>
+
+    <!-- ── STEP 02: RESULTS ───────────────────────────────────────── -->
+    <section class="results-panel" id="results-panel" hidden>
+      <div class="panel-head">
+        <div>
+          <p class="step-label">02</p>
+          <h2>Evidence readout</h2>
+        </div>
+        <span class="status-pill" id="status-pill">VERIFIED</span>
+      </div>
+
+      <!-- Image comparison -->
+      <div class="image-row">
+        <div class="image-card">
+          <p class="card-label">INPUT</p>
+          <img id="result-input" alt="Analyzed input image">
+        </div>
+        <div class="image-divider">→</div>
+        <div class="image-card candidate-image-card">
+          <p class="card-label">SELECTED CANDIDATE <span id="candidate-rank">#1</span></p>
+          <p class="candidate-title" id="candidate-title"></p>
+          <img id="result-candidate" alt="Selected candidate image">
+          <a class="source-link" id="source-link" href="#" target="_blank" rel="noreferrer noopener" hidden>Open source page ↗</a>
+        </div>
+      </div>
+
+      <!-- Evidence layers -->
+      <div class="evidence-grid">
+
+        <!-- Face similarity -->
+        <div class="evidence-card">
+          <p class="card-label">ARCFACE SIMILARITY</p>
+          <div class="evidence-value">
+            <strong class="score" id="similarity">—</strong>
+            <span class="score-bar-wrap"><span class="score-bar" id="score-bar"></span></span>
+          </div>
+          <p class="evidence-note">Cosine similarity of face embeddings.<br>
+            Threshold: <span id="threshold">—</span>. A score is evidence of resemblance, not identity.</p>
+          <span class="layer-badge" id="face-badge">—</span>
+        </div>
+
+        <!-- Source attribution -->
+        <div class="evidence-card">
+          <p class="card-label">SOURCE ATTRIBUTION</p>
+          <a class="source-url" id="source-url" href="#" target="_blank" rel="noreferrer noopener">—</a>
+          <p class="evidence-note">The page where this candidate image was discovered.<br>
+            Source is <strong>unconfirmed</strong> — this is where Google Lens found it, not proof of original publication.</p>
+          <span class="layer-badge" id="source-badge">UNCONFIRMED SOURCE</span>
+        </div>
+
+        <!-- SHA-256 integrity -->
+        <div class="evidence-card hash-card">
+          <p class="card-label">FILE INTEGRITY · SHA-256</p>
+          <code class="hash" id="sha256">—</code>
+          <p class="evidence-note">Exact byte fingerprint of the preserved artifact.<br>
+            Matches only if the file has not been altered since registration.</p>
+          <span class="layer-badge layer-badge--green" id="hash-badge">—</span>
+        </div>
+
+        <!-- Blockchain record -->
+        <div class="evidence-card">
+          <p class="card-label">BLOCKCHAIN RECORD</p>
+          <dl class="blockchain-dl">
+            <dt>Transaction</dt>
+            <dd class="mono-small truncate" id="tx-hash">—</dd>
+            <dt>Block</dt>
+            <dd id="block-number">—</dd>
+            <dt>Chain ID</dt>
+            <dd id="chain-id">—</dd>
+            <dt>Contract</dt>
+            <dd class="mono-small truncate" id="contract-address">—</dd>
+          </dl>
+          <span class="layer-badge" id="chain-badge">—</span>
+        </div>
+
+      </div>
+
+      <!-- Disclaimer -->
+      <div class="disclaimer">
+        <p class="eyebrow">What each layer establishes</p>
+        <ul>
+          <li><strong>ArcFace</strong> — measures visual face similarity between embeddings. Not a legal identity claim.</li>
+          <li><strong>SHA-256</strong> — proves the exact bytes of this file have not changed since fingerprinting.</li>
+          <li><strong>Blockchain</strong> — proves a fingerprint was recorded on this chain at this transaction. It does not prove ownership, original authorship, or content authenticity.</li>
+        </ul>
+      </div>
+
+      <!-- Final verdict -->
+      <div class="verdict" id="verdict">
+        <span class="verdict-mark" id="verdict-mark">✓</span>
+        <div>
+          <p class="eyebrow">Blockchain verification read-back</p>
+          <h2 id="verdict-title">BLOCKCHAIN VERIFICATION PASSED</h2>
+          <p id="verdict-copy">The preserved artifact matches the fingerprint recorded on-chain.</p>
+        </div>
+      </div>
+
+    </section>
+
   </main>
+
+  <footer class="footer">
+    <span>VERITRACE / EVIDENCE CONSOLE</span>
+  </footer>
+
   <script src="app.js"></script>
 </body>
 </html>

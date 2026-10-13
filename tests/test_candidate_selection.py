@@ -375,5 +375,47 @@ class TestEmptyCandidateList(unittest.TestCase):
         self.assertTrue((self.tmpdir / "test-empty" / "selection_metadata.json").is_file())
 
 
+class TestLocalUploadCandidateSelection(unittest.TestCase):
+    """Test candidate selection when user uploads a local file without source_url."""
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self.input_img = self.tmpdir / "input.jpg"
+        self.input_img.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 100)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @patch("pipeline.config")
+    @patch("pipeline.search_google_lens")
+    def test_local_upload_delegates_to_lens_image_path(self, mock_search, mock_config):
+        mock_config.ARTIFACTS_DIR = self.tmpdir
+        mock_config.FACE_SIMILARITY_THRESHOLD = 0.40
+        mock_config.MAX_CANDIDATES = 20
+        mock_search.return_value = []
+
+        mock_engine = MagicMock()
+        ref_face = _face_record([1.0, 0.0, 0.0])
+        mock_engine.analyse_file.return_value = [ref_face]
+
+        from pipeline import select_candidate
+        result = select_candidate(
+            input_image=str(self.input_img),
+            case_id="test-upload",
+            threshold=0.40,
+            engine=mock_engine,
+        )
+
+        mock_search.assert_called_once()
+        call_kwargs = mock_search.call_args[1]
+        self.assertEqual(call_kwargs["image_path"], str(self.input_img))
+
+        # Check metadata.json preserved local_upload entry
+        meta_file = self.tmpdir / "test-upload" / "metadata.json"
+        self.assertTrue(meta_file.is_file())
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        self.assertEqual(meta["input"]["source_type"], "local_upload")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,4 @@
-"""Download and preserve exact image response bytes for an evidence case."""
+"""Download and preserve exact image response bytes for an evidence case safely."""
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -6,7 +6,9 @@ from urllib.parse import urlparse
 
 import requests
 
+import config
 from search.lens import LensCandidate
+from search.security import SecurityError, validate_public_url
 
 
 class DownloadError(RuntimeError):
@@ -28,21 +30,59 @@ def _extension(url: str, content_type: str, fallback: str = ".bin") -> str:
     return suffix if suffix in {".jpg", ".jpeg", ".png", ".webp"} else fallback
 
 
-def download_image(url: str, destination: Path) -> int:
-    """Download an accessible image and write its response bytes unchanged."""
+def download_image(url: str, destination: Path, max_bytes: int = None) -> int:
+    """Download an accessible image and write its response bytes unchanged.
+
+    Validates URL safety, prevents SSRF, and enforces maximum size constraints.
+    """
+    if max_bytes is None:
+        max_bytes = getattr(config, "MAX_IMAGE_DOWNLOAD_BYTES", 15 * 1024 * 1024)
+
+    # Validate URL against SSRF
     try:
-        response = requests.get(url, timeout=60, headers={"User-Agent": "Goaa evidence downloader/1.0"})
+        url = validate_public_url(url)
+    except SecurityError as exc:
+        raise DownloadError(f"Security validation rejected image URL: {exc}") from exc
+
+    try:
+        response = requests.get(
+            url,
+            timeout=30,
+            headers={"User-Agent": "VeriTrace evidence downloader/1.0"},
+            stream=True,
+            allow_redirects=True,
+        )
         response.raise_for_status()
     except requests.RequestException as exc:
         raise DownloadError(f"download failed: {exc}") from exc
+
     content_type = response.headers.get("content-type", "")
-    if not content_type.lower().startswith("image/"):
+    # Check if declared content type is image (or octet-stream fallback)
+    if not (content_type.lower().startswith("image/") or "octet-stream" in content_type.lower()):
         raise DownloadError(f"response is not an image ({content_type or 'missing content type'})")
-    if not response.content:
+
+    content_length = response.headers.get("content-length")
+    if content_length and int(content_length) > max_bytes:
+        raise DownloadError(f"image size ({content_length} bytes) exceeds limit ({max_bytes} bytes)")
+
+    # Read chunks safely enforcing max_bytes
+    chunks = []
+    total_bytes = 0
+    for chunk in response.iter_content(chunk_size=65536):
+        if not chunk:
+            continue
+        total_bytes += len(chunk)
+        if total_bytes > max_bytes:
+            raise DownloadError(f"download stream exceeded max size limit of {max_bytes} bytes")
+        chunks.append(chunk)
+
+    data = b"".join(chunks)
+    if not data:
         raise DownloadError("image response was empty")
+
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_bytes(response.content)
-    return len(response.content)
+    destination.write_bytes(data)
+    return len(data)
 
 
 def preserve_case(input_url: str, candidates: list[LensCandidate], case_dir: Path) -> dict:

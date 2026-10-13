@@ -100,6 +100,11 @@ def _download_candidate(
     ext = _extension(candidate.image_url, "", fallback=".jpg")
     filename = f"candidate-{index:03d}{ext}"
     dest = case_dir / filename
+    if dest.is_file() and dest.stat().st_size > 0:
+        return dest, dest.stat().st_size
+    existing = list(case_dir.glob(f"candidate-{index:03d}.*"))
+    if existing and existing[0].is_file() and existing[0].stat().st_size > 0:
+        return existing[0], existing[0].stat().st_size
     size = download_image(candidate.image_url, dest)
     return dest, size
 
@@ -165,6 +170,8 @@ def select_candidate(
     engine: FaceEngine | None = None,
     candidates: list[LensCandidate] | None = None,
     source_url: str | None = None,
+    force_refresh: bool = False,
+    dry_run: bool = False,
 ) -> SelectionResult:
     """Run the full candidate selection pipeline.
 
@@ -215,32 +222,88 @@ def select_candidate(
 
     # --- 2. SerpApi Google Lens search (unless pre-provided) ---
     if candidates is None:
-        # Need a public URL. An explicit source page takes precedence; otherwise
-        # reuse the resolved URL preserved in metadata from an earlier run.
         meta_path = case_dir / "metadata.json"
-        if source_url:
-            image_url = resolve_public_image_url(source_url)
-            metadata = {
-                "input": {
-                    "source_url": image_url,
-                    "source_page_url": source_url,
-                    "local_artifact_filename": Path(input_image).name,
-                    "size_bytes": Path(input_image).stat().st_size,
+        sel_meta_path = case_dir / "selection_metadata.json"
+        case_dir.mkdir(parents=True, exist_ok=True)
+
+        # Check if we can resume candidates from existing selection_metadata.json
+        if not force_refresh and sel_meta_path.is_file():
+            try:
+                saved_meta = json.loads(sel_meta_path.read_text(encoding="utf-8"))
+                saved_candidates = []
+                for item in saved_meta.get("all_results", []):
+                    c_info = item.get("candidate") if isinstance(item.get("candidate"), dict) else item
+                    saved_candidates.append(
+                        LensCandidate(
+                            candidate_id=c_info.get("candidate_id") or "",
+                            title=c_info.get("title") or "",
+                            source_url=c_info.get("source_url") or "",
+                            image_url=c_info.get("image_url") or "",
+                            domain=c_info.get("domain") or "",
+                            search_type=c_info.get("search_type") or "visual_matches",
+                            search_rank=c_info.get("search_rank") or 1,
+                        )
+                    )
+                if saved_candidates:
+                    logger.info("Resuming candidate evaluation from %s (%d candidates)", sel_meta_path, len(saved_candidates))
+                    candidates = saved_candidates
+            except Exception as exc:
+                logger.warning("Could not resume from %s: %s", sel_meta_path, exc)
+
+        if candidates is None:
+            if source_url:
+                image_url = resolve_public_image_url(source_url)
+                metadata = {
+                    "input": {
+                        "source_url": image_url,
+                        "source_page_url": source_url,
+                        "local_artifact_filename": Path(input_image).name,
+                        "size_bytes": Path(input_image).stat().st_size if Path(input_image).is_file() else 0,
+                    }
                 }
-            }
-            case_dir.mkdir(parents=True, exist_ok=True)
-            meta_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-        elif meta_path.is_file():
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            image_url = meta.get("input", {}).get("source_url", "")
-        else:
-            image_url = ""
-        if not image_url:
-            raise RuntimeError(
-                "No public image URL available for Lens search.  Provide one via "
-                "metadata.json or pass candidates directly."
-            )
-        candidates = search_google_lens(image_url, search_type=search_type, limit=limit)
+                meta_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+                candidates = search_google_lens(
+                    image_url=image_url,
+                    search_type=search_type,
+                    limit=limit,
+                    force_refresh=force_refresh,
+                    dry_run=dry_run,
+                )
+            elif meta_path.is_file() and json.loads(meta_path.read_text(encoding="utf-8")).get("input", {}).get("source_url"):
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                image_url = meta.get("input", {}).get("source_url", "")
+                candidates = search_google_lens(
+                    image_url=image_url,
+                    search_type=search_type,
+                    limit=limit,
+                    force_refresh=force_refresh,
+                    dry_run=dry_run,
+                )
+            elif Path(input_image).is_file():
+                metadata = {
+                    "input": {
+                        "source_type": "local_upload",
+                        "local_artifact_filename": Path(input_image).name,
+                        "size_bytes": Path(input_image).stat().st_size,
+                    }
+                }
+                meta_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+                candidates = search_google_lens(
+                    image_path=input_image,
+                    search_type=search_type,
+                    limit=limit,
+                    force_refresh=force_refresh,
+                    dry_run=dry_run,
+                )
+            else:
+                raise RuntimeError(
+                    f"No public image URL and input image file does not exist: {input_image}"
+                )
+
+    if dry_run:
+        result.message = "Dry-run validation successful. No API requests were sent to SerpApi."
+        _write_selection_metadata(result, case_dir)
+        return result
 
     result.total_candidates = len(candidates)
     if not candidates:

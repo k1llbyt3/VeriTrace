@@ -17,6 +17,7 @@ blockchain/cache/
 # ---- case evidence (may contain personal / third-party images) ----
 artifacts/*
 !artifacts/.gitkeep
+specs/
 
 # ---- local input images ----
 samples/*
@@ -26,3 +27,4 @@ samples/*
 Thumbs.db
 desktop.ini
 .DS_Store
+.vscode

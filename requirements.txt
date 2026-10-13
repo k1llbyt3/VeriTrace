@@ -8,7 +8,9 @@ opencv-python-headless==4.10.0.84
 pillow==10.4.0
 
 # --- face detection (SCRFD) + face embeddings (ArcFace) ---
-insightface==0.7.3
+# Note: The project runs the InsightFace ONNX models directly via onnxruntime
+# without requiring C++ compilation of the insightface package on Windows.
+# insightface is optional.
 onnxruntime==1.19.2
 
 # --- HTTP calls (SerpApi, candidate image download) + .env loading ---

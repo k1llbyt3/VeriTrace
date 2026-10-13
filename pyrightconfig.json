@@ -1,0 +1,19 @@
+{
+  "include": [
+    "python",
+    "tests"
+  ],
+  "extraPaths": [
+    "python",
+    "./python"
+  ],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [
+        "python",
+        "./python"
+      ]
+    }
+  ]
+}

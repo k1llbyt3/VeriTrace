@@ -19,6 +19,39 @@ from search.lens import SearchError, search_google_lens
 from search.downloader import DownloadError, preserve_case
 
 
+def configure_streams() -> None:
+    """Safely configure stdout and stderr for UTF-8 with fallback replacement.
+
+    Prevents Windows console / cp1252 crashes when printing non-ASCII text.
+    """
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is not None and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                try:
+                    stream.reconfigure(errors="replace")
+                except Exception:
+                    pass
+
+
+def safe_str(val: object) -> str:
+    """Ensure text can be safely written to stdout without encoding crashes."""
+    if val is None:
+        return ""
+    text = str(val)
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    try:
+        text.encode(encoding)
+        return text
+    except (UnicodeEncodeError, LookupError):
+        return text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+
+
+configure_streams()
+
+
 def cmd_hash(args) -> int:
     try:
         report = hash_report(args.file)
@@ -142,24 +175,41 @@ def cmd_rank(args) -> int:
 def cmd_search(args) -> int:
     """Run Google Lens through SerpApi and print normalized candidates."""
     try:
-        candidates = search_google_lens(args.image_url, search_type=args.type, limit=args.limit)
+        candidates = search_google_lens(
+            image_url=args.image_url,
+            image_id=args.image_id,
+            image_path=args.image_path,
+            search_type=args.type,
+            limit=args.limit,
+            force_refresh=args.refresh,
+            dry_run=args.dry_run,
+        )
     except SearchError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
-    print(f"Image URL : {args.image_url}")
+    if args.dry_run:
+        print("Dry-run validation successful. No API requests were sent to SerpApi.")
+        return 0
+    target_desc = args.image_url or (f"image_id:{args.image_id}" if args.image_id else args.image_path)
+    print(f"Target    : {target_desc}")
     print(f"Results   : {len(candidates)}")
     for candidate in candidates:
-        print(f"[{candidate.search_type} #{candidate.search_rank}] {candidate.title or '(untitled)'}")
-        print(f"  Source  : {candidate.domain}")
-        print(f"  URL     : {candidate.source_url or '(none)'}")
-        print(f"  Image   : {candidate.image_url or '(none)'}")
+        print(f"[{candidate.search_type} #{candidate.search_rank}] {safe_str(candidate.title or '(untitled)')}")
+        print(f"  Source  : {safe_str(candidate.domain)}")
+        print(f"  URL     : {safe_str(candidate.source_url or '(none)')}")
+        print(f"  Image   : {safe_str(candidate.image_url or '(none)')}")
     return 0
 
 
 def cmd_preserve(args) -> int:
     """Search Lens and preserve the input plus the first accessible candidate."""
     try:
-        candidates = search_google_lens(args.image_url, search_type=args.type, limit=args.limit)
+        candidates = search_google_lens(
+            args.image_url,
+            search_type=args.type,
+            limit=args.limit,
+            force_refresh=args.refresh,
+        )
         if not candidates:
             raise DownloadError("Google Lens returned no candidates")
         metadata = preserve_case(args.image_url, candidates, config.ARTIFACTS_DIR / args.case)
@@ -167,8 +217,8 @@ def cmd_preserve(args) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     candidate = metadata["candidate"]
-    print(f"Candidate found: {candidate['title'] or '(untitled)'}")
-    print(f"Downloaded: {candidate['image_url']}")
+    print(f"Candidate found: {safe_str(candidate['title'] or '(untitled)')}")
+    print(f"Downloaded: {safe_str(candidate['image_url'])}")
     print(f"Size: {candidate['size_bytes']} bytes")
     print(f"Saved: {config.ARTIFACTS_DIR / args.case / candidate['local_artifact_filename']}")
     print(f"Metadata: {config.ARTIFACTS_DIR / args.case / 'metadata.json'}")
@@ -188,6 +238,8 @@ def cmd_select(args) -> int:
             search_type=args.type,
             limit=args.limit,
             source_url=args.source_url,
+            force_refresh=args.refresh,
+            dry_run=args.dry_run,
         )
     except (SearchError, RuntimeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -212,9 +264,11 @@ def cmd_select(args) -> int:
             status = f"SKIPPED ({cr.error})"
         elif cr.error:
             status = f"ERROR ({cr.error})"
+        title_str = safe_str(cr.candidate.title or "(untitled)")
+        domain_str = safe_str(cr.candidate.domain or "")
         print(f"  {rank}. [{cr.candidate.candidate_id}] "
               f"similarity={cr.best_face_similarity:.4f}  {status}")
-        print(f"     {cr.candidate.title or '(untitled)'} — {cr.candidate.domain}")
+        print(f"     {title_str} - {domain_str}")
 
     print()
     if result.has_selection:
@@ -223,9 +277,9 @@ def cmd_select(args) -> int:
         print("SELECTED CANDIDATE")
         print("=" * 40)
         print(f"  ID         : {sel.candidate.candidate_id}")
-        print(f"  Title      : {sel.candidate.title or '(untitled)'}")
-        print(f"  Source URL : {sel.candidate.source_url}")
-        print(f"  Image URL  : {sel.candidate.image_url}")
+        print(f"  Title      : {safe_str(sel.candidate.title or '(untitled)')}")
+        print(f"  Source URL : {safe_str(sel.candidate.source_url)}")
+        print(f"  Image URL  : {safe_str(sel.candidate.image_url)}")
         print(f"  Similarity : {sel.best_face_similarity:.4f}")
         print(f"  Artifact   : {sel.local_path}")
         print(f"  Size       : {sel.size_bytes} bytes")
@@ -428,9 +482,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_rank.set_defaults(func=cmd_rank)
 
     p_search = sub.add_parser("search", help="Google Lens reverse-image search via SerpApi")
-    p_search.add_argument("--image-url", required=True, help="publicly accessible image URL")
+    p_search.add_argument("--image-url", help="publicly accessible image URL")
+    p_search.add_argument("--image-id", help="temporary SerpApi image ID")
+    p_search.add_argument("--image-path", help="path to local image file to upload to SerpApi")
     p_search.add_argument("--type", choices=("all", "exact_matches", "visual_matches"), default="all")
     p_search.add_argument("--limit", type=int, default=20)
+    p_search.add_argument("--refresh", action="store_true", help="bypass cache and fetch fresh results")
+    p_search.add_argument("--dry-run", action="store_true", help="validate parameters without calling SerpApi")
     p_search.set_defaults(func=cmd_search)
 
     p_preserve = sub.add_parser("preserve", help="download and preserve a Lens candidate")
@@ -438,9 +496,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_preserve.add_argument("--case", default="case-001")
     p_preserve.add_argument("--type", choices=("all", "exact_matches", "visual_matches"), default="visual_matches")
     p_preserve.add_argument("--limit", type=int, default=20)
+    p_preserve.add_argument("--refresh", action="store_true", help="bypass cache and fetch fresh results")
     p_preserve.set_defaults(func=cmd_preserve)
 
-    p_select = sub.add_parser("select-candidate", help="end-to-end: Lens → download → face compare → select best candidate")
+    p_select = sub.add_parser("select-candidate", help="end-to-end: Lens -> download -> face compare -> select best candidate")
     p_select.add_argument("input_image", help="path to local reference face image")
     p_select.add_argument("--case", default="case-001", help="case directory name")
     p_select.add_argument("--threshold", type=float, default=None, help="override FACE_SIMILARITY_THRESHOLD")
@@ -450,6 +509,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--source-url",
         help="public source page or image URL used for Google Lens (optional)",
     )
+    p_select.add_argument("--refresh", action="store_true", help="bypass cache and fetch fresh results")
+    p_select.add_argument("--dry-run", action="store_true", help="validate parameters without calling SerpApi")
     p_select.set_defaults(func=cmd_select)
 
     p_anchor = sub.add_parser("anchor", help="SHA-256 a file and record it on the blockchain")
